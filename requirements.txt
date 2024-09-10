@@ -6,3 +6,4 @@ streamlit
 plotly
 polygon-api-client 
 requests
+altair
