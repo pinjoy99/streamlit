@@ -1,58 +1,44 @@
-"""
-Streamlit App: Bullish Percent Index (BPI) vs SPX Index
-This app downloads the Bullish Percent Index (BPI) and compares it with the SPX index in an interactive chart.
-"""
-
 import streamlit as st
 import yfinance as yf
-import pandas as pd
-import altair as alt
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
 
-# Set up the Streamlit app layout
-st.set_page_config(layout="wide")
-st.title("Bullish Percent Index (BPI) vs SPX Index")
+# Set default values
+default_tickers = ["^GSPC", "^BPSPX"]  # SPX and BPSPX
+default_period = "1y"
 
-# Function to download data
-def download_data(ticker, start, end):
-    data = yf.download(ticker, start=start, end=end)
-    return data['Close']
+# Streamlit app title
+st.title("Stock Data Visualization")
 
-# Define the date range for data retrieval
-start_date = '2020-01-01'
-end_date = '2024-01-01'
+# Sidebar for user inputs
+st.sidebar.header("User Input")
+tickers = st.sidebar.text_input("Enter tickers (comma separated)", ",".join(default_tickers))
+period = st.sidebar.selectbox("Select period", ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"], index=5)
 
-# Download BPI and SPX data
-bpi_data = download_data('^BPSPX', start_date, end_date)
-spx_data = download_data('^GSPC', start_date, end_date)
+# Convert user input into a list
+ticker_list = [ticker.strip() for ticker in tickers.split(",")]
 
-# Combine data into a single DataFrame
-data = pd.DataFrame({
-    'Date': bpi_data.index,
-    'BPI': bpi_data.values,
-    'SPX': spx_data.values
-})
+# Download data using yfinance
+data = yf.download(ticker_list, period=period)
 
-# Create an interactive chart using Altair
-chart = alt.Chart(data).transform_fold(
-    fold=['BPI', 'SPX'],
-    as_=['Index', 'Value']
-).mark_line().encode(
-    x='Date:T',
-    y='Value:Q',
-    color='Index:N'
-).properties(
-    width=800,
-    height=400
+# Create interactive chart using Plotly
+fig = go.Figure()
+
+# Add traces for each ticker
+for ticker in ticker_list:
+    fig.add_trace(go.Scatter(x=data.index, y=data['Close'][ticker], mode='lines', name=ticker))
+
+# Add secondary y-axis
+fig.update_layout(
+    title="Stock Prices Over Time",
+    xaxis_title="Date",
+    yaxis_title="Price",
+    yaxis2=dict(
+        title="Secondary Axis",
+        overlaying='y',
+        side='right'
+    )
 )
 
 # Display the chart in Streamlit
-st.altair_chart(chart, use_container_width=True)
-
-# Add a download button for the data
-csv = data.to_csv(index=False)
-st.download_button(
-    label="Download data as CSV",
-    data=csv,
-    file_name='bpi_spx_data.csv',
-    mime='text/csv'
-)
+st.plotly_chart(fig)
