@@ -4,5 +4,5 @@ matplotlib
 yfinance
 streamlit
 plotly
-polygon 
+polygon-api-client 
 requests
