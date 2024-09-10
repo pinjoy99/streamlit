@@ -44,8 +44,8 @@ options1 = stock.option_chain(exp_date1.strftime('%Y-%m-%d'))
 options2 = stock.option_chain(exp_date2.strftime('%Y-%m-%d'))
 
 # Calculate strike range
-lower_strike = current_price * 0.95
-upper_strike = current_price * 1.05
+lower_strike = current_price * 0.9
+upper_strike = current_price * 1.1
 
 # Process call options
 calls1 = calculate_option_values(options1.calls, True, current_price)
