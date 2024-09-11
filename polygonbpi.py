@@ -25,7 +25,7 @@ if polygon_api_key:
     spx_df = pd.DataFrame(spx_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
     # Fetch Bullish Percent Index data
-    bpi_data = client.get_aggs("BPI", 1, "day", start_date, end_date)
+    bpi_data = client.get_aggs("VIX", 1, "day", start_date, end_date)
     bpi_df = pd.DataFrame(bpi_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
     # Plotting
