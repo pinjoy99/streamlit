@@ -7,3 +7,4 @@ plotly
 polygon-api-client
 requests
 altair
+mpld3
