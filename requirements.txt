@@ -4,6 +4,6 @@ matplotlib
 yfinance
 streamlit
 plotly
-polygon-api-client 
+polygon-api-client
 requests
 altair
