@@ -1,31 +1,44 @@
+import os
 import streamlit as st
+from polygon import RESTClient
 import pandas as pd
-import plotly.express as px
-import requests
+import matplotlib.pyplot as plt
+import mpld3
+import streamlit.components.v1 as components
 
-# Set your Polygon.io API key
-API_KEY = 'POLYGON_API_KEY'
+# Set up the Streamlit app
+st.title("Bullish Percent Index and SPX Interactive Chart")
 
-# Function to fetch data from Polygon.io
-def fetch_data(ticker):
-    url = f'https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/2023-01-01/2023-12-31?apiKey={API_KEY}'
-    response = requests.get(url)
-    data = response.json()
-    return pd.DataFrame(data['results'])
+# Input for API key
+polygon_api_key = st.sidebar.text_input("Polygon API Key", type="password")
 
-# Fetch Bullish Percent Index and SPX data
-bpi_data = fetch_data('I:BPI')
-spx_data = fetch_data('I:SPX')
+# Input for date range
+start_date = st.sidebar.date_input("Start Date")
+end_date = st.sidebar.date_input("End Date")
 
-# Streamlit app layout
-st.title('Bullish Percent Index and SPX Interactive Chart')
+if polygon_api_key:
+    # Initialize the Polygon REST client
+    client = RESTClient(polygon_api_key)
 
-# Plot the data using Plotly
-fig = px.line(bpi_data, x='t', y='c', title='Bullish Percent Index')
-fig.add_scatter(x=spx_data['t'], y=spx_data['c'], mode='lines', name='SPX')
+    # Fetch SPX data
+    spx_data = client.get_aggs("SPX", 1, "day", start_date, end_date)
+    spx_df = pd.DataFrame(spx_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
-# Display the chart in Streamlit
-st.plotly_chart(fig)
+    # Fetch Bullish Percent Index data
+    bpi_data = client.get_aggs("BPI", 1, "day", start_date, end_date)
+    bpi_df = pd.DataFrame(bpi_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
-# Run the Streamlit app
-# Use the command: streamlit run app.py
+    # Plotting
+    fig, ax = plt.subplots()
+    ax.plot(pd.to_datetime(spx_df['timestamp'], unit='ms'), spx_df['close'], label='SPX')
+    ax.plot(pd.to_datetime(bpi_df['timestamp'], unit='ms'), bpi_df['close'], label='Bullish Percent Index')
+    ax.set_title('SPX and Bullish Percent Index')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Index Value')
+    ax.legend()
+
+    # Make the chart interactive
+    fig_html = mpld3.fig_to_html(fig)
+    components.html(fig_html, height=600)
+else:
+    st.error("Please enter your Polygon API Key.")
