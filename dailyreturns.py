@@ -16,7 +16,7 @@ def get_data():
     start_date = end_date - timedelta(days=3650)  # 10 years
     ticker = 'SPX'
     data = yf.download(ticker, start=start_date, end=end_date)
-    data['Returns'] = data['Adj Close'].pct_change()
+    data['Returns'] = data['Close'].pct_change()
     return data
 
 data = get_data()
@@ -28,7 +28,7 @@ st.dataframe(data)
 # Histogram of daily returns
 st.subheader('Histogram of Daily Simple Returns')
 fig, ax = plt.subplots(figsize=(10, 6))
-sns.histplot(data['Returns'].dropna(), bins=50, kde=True, ax=ax)
+sns.histplot(data['Returns'].dropna(), bins=200, kde=True, ax=ax)
 ax.set_title('Distribution of Daily Simple Returns for SPX')
 ax.set_xlabel('Daily Returns')
 ax.set_ylabel('Frequency')
