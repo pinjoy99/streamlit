@@ -5,7 +5,7 @@ import plotly.graph_objs as go
 from datetime import datetime, timedelta
 
 # Set default values
-default_tickers = ["^GSPC", "^BPSPX"]  # SPX and BPSPX
+default_tickers = ["^GSPC", "^VIX"]  # SPX and VIX
 default_period = "1y"
 
 # Streamlit app title
