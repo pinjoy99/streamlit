@@ -55,7 +55,7 @@ st.download_button(
 
 st.header("Distribution of Daily Returns")
 
-fig_hist = px.histogram(data, x='Daily_Return', nbins=50)
+fig_hist = px.histogram(data, x='Daily_Return', nbins=200)
 fig_hist.update_layout(bargap=0.1)
 st.plotly_chart(fig_hist, use_container_width=True)
 
