@@ -3,65 +3,56 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-st.title('SPX Daily Returns Analysis')
+st.set_page_config(page_title="SPX Daily Returns Analysis", layout="wide")
+
+st.title("SPX Daily Returns Analysis")
 
 # Download data
 @st.cache_data
-def get_data():
+def download_data():
+    symbol = '^GSPC'
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=3650)  # 10 years
-    ticker = 'SPX'
-    data = yf.download(ticker, start=start_date, end=end_date)
-    data['Returns'] = data['Close'].pct_change()
+    start_date = end_date - timedelta(days=3652)  # Approximately 10 years
+    data = yf.download(symbol, start=start_date, end=end_date)
+    data['Daily Return'] = data['Adj Close'].pct_change()
     return data
 
-data = get_data()
+data = download_data()
 
 # Display OHLC data
-st.subheader('OHLC Data')
-st.dataframe(data)
+st.header("SPX OHLC Data")
+st.dataframe(data.head())
 
 # Histogram of daily returns
-st.subheader('Histogram of Daily Simple Returns')
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.histplot(data['Returns'].dropna(), bins=200, kde=True, ax=ax)
-ax.set_title('Distribution of Daily Simple Returns for SPX')
-ax.set_xlabel('Daily Returns')
-ax.set_ylabel('Frequency')
-ax.grid(True)
-st.pyplot(fig)
+st.header("Histogram of Daily Returns")
+fig_hist = go.Figure()
+fig_hist.add_trace(go.Histogram(x=data['Daily Return'].dropna(), nbinsx=200, name='Daily Returns'))
+fig_hist.update_layout(title='Histogram of Daily Returns for SPX', xaxis_title='Daily Returns', yaxis_title='Frequency')
+st.plotly_chart(fig_hist, use_container_width=True)
 
-# Interactive histogram using Plotly
-st.subheader('Interactive Histogram of Daily Simple Returns')
-fig = go.Figure(data=[go.Histogram(x=data['Returns'].dropna(), nbinsx=50)])
-fig.update_layout(title='Distribution of Daily Simple Returns for SPX',
-                  xaxis_title='Daily Returns',
-                  yaxis_title='Frequency')
-st.plotly_chart(fig)
-
-# Count days below thresholds
-st.subheader('Days with Returns Below Thresholds')
+# Calculate days below thresholds
+st.header("Days Below Return Thresholds")
 thresholds = [-0.05, -0.04, -0.03, -0.02, -0.01]
-days_below = {f"Below {threshold*100}%": (data['Returns'] < threshold).sum() for threshold in thresholds}
-st.table(pd.DataFrame.from_dict(days_below, orient='index', columns=['Count']))
+days_below = {f"{threshold*100}%": (data['Daily Return'] < threshold).sum() for threshold in thresholds}
+
+# Display results in a table
+threshold_df = pd.DataFrame.from_dict(days_below, orient='index', columns=['Number of Days'])
+threshold_df.index.name = 'Threshold'
+st.table(threshold_df)
 
 # Find dates and returns below -2%
-st.subheader('Dates and Returns Below -2%')
-below_2_percent = data[data['Returns'] < -0.02][['Returns']].dropna()
-st.dataframe(below_2_percent)
+negative_returns = data[data['Daily Return'] < -0.02][['Daily Return']]
+negative_returns.reset_index(inplace=True)
 
-# Interactive scatter plot for returns below -2%
-st.subheader('Interactive Chart: Returns Below -2%')
-fig = go.Figure(data=go.Scatter(x=below_2_percent.index, y=below_2_percent['Returns'],
-                                mode='markers',
-                                marker=dict(color=below_2_percent['Returns'], 
-                                            colorscale='Viridis',
-                                            showscale=True)))
-fig.update_layout(title='Daily Returns Below -2%',
-                  xaxis_title='Date',
-                  yaxis_title='Return')
-st.plotly_chart(fig)
+# Display negative returns in a chart
+st.header("Daily Returns Below -2%")
+fig_negative = go.Figure()
+fig_negative.add_trace(go.Scatter(x=negative_returns['Date'], y=negative_returns['Daily Return'], mode='markers', name='Returns < -2%'))
+fig_negative.update_layout(title='Daily Returns Below -2%', xaxis_title='Date', yaxis_title='Daily Return')
+st.plotly_chart(fig_negative, use_container_width=True)
+
+# Display negative returns in a table
+st.dataframe(negative_returns)
