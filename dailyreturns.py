@@ -1,58 +1,59 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="SPX Daily Returns Analysis", layout="wide")
+st.title('SPX Daily OHLC Analysis')
 
-st.title("SPX Daily Returns Analysis")
+# Download SPX data for the past 10 years
+end_date = datetime.now()
+start_date = end_date - timedelta(days=3650)
+ticker = "^GSPC"  # SPX ticker symbol
 
-# Download data
 @st.cache_data
-def download_data():
-    symbol = '^GSPC'
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=3652)  # Approximately 10 years
-    data = yf.download(symbol, start=start_date, end=end_date)
-    data['Daily Return'] = data['Adj Close'].pct_change()
+def load_data():
+    data = yf.download(ticker, start=start_date, end=end_date)
+    data['Daily_Return'] = data['Close'].pct_change()
     return data
 
-data = download_data()
+data = load_data()
 
 # Display OHLC data
-st.header("SPX OHLC Data")
-st.dataframe(data.head())
+st.subheader('SPX OHLC Data')
+st.dataframe(data)
 
-# Histogram of daily returns
-st.header("Histogram of Daily Returns")
-fig_hist = go.Figure()
-fig_hist.add_trace(go.Histogram(x=data['Daily Return'].dropna(), nbinsx=200, name='Daily Returns'))
-fig_hist.update_layout(title='Histogram of Daily Returns for SPX', xaxis_title='Daily Returns', yaxis_title='Frequency')
+# Calculate and display histogram of daily returns
+st.subheader('Histogram of Daily Returns')
+fig_hist = px.histogram(data, x='Daily_Return', nbins=200, 
+                        title='Distribution of Daily Returns')
 st.plotly_chart(fig_hist, use_container_width=True)
 
-# Calculate days below thresholds
-st.header("Days Below Return Thresholds")
+# Calculate and display return thresholds
+st.subheader('Return Thresholds')
 thresholds = [-0.05, -0.04, -0.03, -0.02, -0.01]
-days_below = {f"{threshold*100}%": (data['Daily Return'] < threshold).sum() for threshold in thresholds}
-
-# Display results in a table
-threshold_df = pd.DataFrame.from_dict(days_below, orient='index', columns=['Number of Days'])
-threshold_df.index.name = 'Threshold'
+threshold_counts = [(data['Daily_Return'] < threshold).sum() for threshold in thresholds]
+threshold_df = pd.DataFrame({
+    'Threshold': [f"{threshold:.1%}" for threshold in thresholds],
+    'Number of Days': threshold_counts
+})
 st.table(threshold_df)
 
-# Find dates and returns below -2%
-negative_returns = data[data['Daily Return'] < -0.02][['Daily Return']]
-negative_returns.reset_index(inplace=True)
+# Plot daily returns with marked points below -2%
+st.subheader('Daily Returns Over Time')
+fig_returns = go.Figure()
+fig_returns.add_trace(go.Scatter(x=data.index, y=data['Daily_Return'], 
+                                 mode='lines', name='Daily Returns'))
 
-# Display negative returns in a chart
-st.header("Daily Returns Below -2%")
-fig_negative = go.Figure()
-fig_negative.add_trace(go.Scatter(x=negative_returns['Date'], y=negative_returns['Daily Return'], mode='markers', name='Returns < -2%'))
-fig_negative.update_layout(title='Daily Returns Below -2%', xaxis_title='Date', yaxis_title='Daily Return')
-st.plotly_chart(fig_negative, use_container_width=True)
+# Mark points below -2%
+below_threshold = data[data['Daily_Return'] < -0.02]
+fig_returns.add_trace(go.Scatter(x=below_threshold.index, y=below_threshold['Daily_Return'], 
+                                 mode='markers', name='Below -2%', 
+                                 marker=dict(color='red', size=8)))
 
-# Display negative returns in a table
-st.dataframe(negative_returns)
+fig_returns.update_layout(title='Daily Returns with Points Below -2% Marked',
+                          xaxis_title='Date',
+                          yaxis_title='Daily Return')
+
+st.plotly_chart(fig_returns, use_container_width=True)
