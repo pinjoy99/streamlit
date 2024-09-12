@@ -5,63 +5,61 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
 
-st.set_page_config(layout="wide")
+# Set page title
+st.set_page_config(page_title="S&P 500 Analysis", layout="wide")
 
-st.title("S&P 500 (SPX) Data Analysis")
+# Title
+st.title("S&P 500 (SPX) 10-Year Analysis")
 
-## Data Download and Processing
-
-end_date = datetime.now()
-start_date = end_date - timedelta(days=3650)  # Approximately 10 years
-
+# Download data
 @st.cache_data
-def load_data():
-    spx_data = yf.download("^GSPC", start=start_date, end=end_date)
-    spx_data['Daily_Return'] = spx_data['Close'].pct_change()
-    return spx_data
+def get_data():
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=3650)  # Approximately 10 years
+    data = yf.download("^GSPC", start=start_date, end=end_date)
+    return data
 
-data = load_data()
+data = get_data()
 
-## OHLC Chart
+# Calculate daily returns
+data['Daily_Return'] = data['Adj Close'].pct_change()
 
-st.header("S&P 500 OHLC Chart")
+# Display OHLC data
+st.header("OHLC Data")
+st.dataframe(data)
 
-fig_ohlc = go.Figure(data=[go.Candlestick(x=data.index,
+# Interactive OHLC chart
+st.header("Interactive OHLC Chart")
+fig = go.Figure(data=[go.Candlestick(x=data.index,
                 open=data['Open'],
                 high=data['High'],
                 low=data['Low'],
                 close=data['Close'])])
+fig.update_layout(title="S&P 500 OHLC Chart", xaxis_rangeslider_visible=False)
+st.plotly_chart(fig, use_container_width=True)
 
-fig_ohlc.update_layout(xaxis_rangeslider_visible=False)
-st.plotly_chart(fig_ohlc, use_container_width=True)
-
-## Data Table
-
-st.header("S&P 500 Data Table")
-
-st.dataframe(data)
-
-## Download Button
-
-csv = data.to_csv().encode('utf-8')
-st.download_button(
-    label="Download S&P 500 Data as CSV",
-    data=csv,
-    file_name="spx_data.csv",
-    mime="text/csv",
-)
-
-## Daily Returns Histogram
-
+# Histogram of daily returns
 st.header("Distribution of Daily Returns")
-
-fig_hist = px.histogram(data, x='Daily_Return', nbins=200)
-fig_hist.update_layout(bargap=0.1)
+fig_hist = px.histogram(data, x='Daily_Return', nbins=100)
+fig_hist.update_layout(title="Histogram of Daily Returns", xaxis_title="Daily Return", yaxis_title="Frequency")
 st.plotly_chart(fig_hist, use_container_width=True)
 
-## Summary Statistics
+# Calculate number of days below thresholds
+thresholds = [-0.05, -0.04, -0.03, -0.02, -0.01]
+days_below_threshold = {f"Below {threshold*100}%": (data['Daily_Return'] < threshold).sum() for threshold in thresholds}
 
-st.header("Summary Statistics")
+# Display results in a table
+st.header("Number of Days Below Thresholds")
+threshold_df = pd.DataFrame.from_dict(days_below_threshold, orient='index', columns=['Count'])
+st.table(threshold_df)
 
+# Interactive line chart of daily returns
+st.header("Daily Returns Over Time")
+fig_line = px.line(data, x=data.index, y='Daily_Return')
+fig_line.update_layout(title="Daily Returns", xaxis_title="Date", yaxis_title="Daily Return")
+st.plotly_chart(fig_line, use_container_width=True)
+
+# Summary statistics
+st.header("Summary Statistics of Daily Returns")
 summary_stats = data['Daily_Return'].describe()
 st.table(summary_stats)
