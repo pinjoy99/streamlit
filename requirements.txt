@@ -8,3 +8,4 @@ polygon-api-client
 requests
 altair
 mpld3
+seaborn
