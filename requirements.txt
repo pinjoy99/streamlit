@@ -9,3 +9,4 @@ requests
 altair
 mpld3
 seaborn
+ta
