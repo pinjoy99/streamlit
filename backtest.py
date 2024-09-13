@@ -106,7 +106,7 @@ st.plotly_chart(fig, use_container_width=True)
 trades = data[data['Position'] != data['Position'].shift(1)].copy()
 trades['Trade_Type'] = np.where(trades['Position'] == 1, 'Buy', 'Sell')
 trades['Price'] = data['Close']
-trades['Holding_Period'] = (trades.index - pd.Series(trades.index).shift(1)).days
+trades['Holding_Period'] = (trades.index - trades.index.shift(periods=1, freq=None)).days
 trades['Profit_Loss'] = trades['Close'] - trades['Close'].shift(1)
 trades['Cumulative_Profit_Loss'] = trades['Profit_Loss'].cumsum()
 
