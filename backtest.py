@@ -1,161 +1,118 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import ta
 
-# Define the list of top 20 most traded stocks and ETFs
-top_tickers = [
-    "SPY", "QQQ", "IWM", "VXUS", "RSP", "EEM", "SHV", "XLF", "SPDR", "IVV",
-    "EFA", "TLT", "XLV", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"
-]
+# List of top 20 most traded stocks and ETFs
+top_tickers = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'FB', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'PG', 'UNH', 'HD', 'BAC', 'MA', 'DIS', 'ADBE', 'CRM', 'NFLX', 'CMCSA']
 
 # Sidebar inputs
-st.sidebar.header("Settings")
-ticker = st.sidebar.selectbox("Select a stock/ETF", top_tickers)
-end_date = datetime.now()
-start_date = st.sidebar.date_input("Start Date", end_date - timedelta(days=5*365))
-end_date = st.sidebar.date_input("End Date", end_date)
-
-# Technical indicator selection
+st.sidebar.title("Stock Trading Strategy Backtester")
+ticker = st.sidebar.selectbox("Select a stock ticker", top_tickers)
+years = st.sidebar.number_input("Number of years of historical data", min_value=1, max_value=10, value=5)
 indicator = st.sidebar.selectbox("Select an indicator", ["MACD", "RSI", "ATR"])
 
 # Indicator parameters
 if indicator == "MACD":
-    fast_period = st.sidebar.slider("Fast period", 5, 50, 12)
-    slow_period = st.sidebar.slider("Slow period", 10, 100, 26)
-    signal_period = st.sidebar.slider("Signal period", 5, 20, 9)
+    fast_period = st.sidebar.number_input("Fast period", min_value=1, max_value=50, value=12)
+    slow_period = st.sidebar.number_input("Slow period", min_value=1, max_value=100, value=26)
+    signal_period = st.sidebar.number_input("Signal period", min_value=1, max_value=50, value=9)
 elif indicator == "RSI":
-    rsi_period = st.sidebar.slider("RSI period", 5, 30, 14)
-    overbought = st.sidebar.slider("Overbought level", 60, 90, 70)
-    oversold = st.sidebar.slider("Oversold level", 10, 40, 30)
+    rsi_period = st.sidebar.number_input("RSI period", min_value=1, max_value=50, value=14)
+    overbought = st.sidebar.number_input("Overbought level", min_value=50, max_value=100, value=70)
+    oversold = st.sidebar.number_input("Oversold level", min_value=0, max_value=50, value=30)
 elif indicator == "ATR":
-    atr_period = st.sidebar.slider("ATR period", 5, 30, 14)
-    atr_multiplier = st.sidebar.slider("ATR multiplier", 1.0, 5.0, 2.0, 0.1)
+    atr_period = st.sidebar.number_input("ATR period", min_value=1, max_value=50, value=14)
+    atr_multiplier = st.sidebar.number_input("ATR multiplier", min_value=0.1, max_value=5.0, value=2.0, step=0.1)
 
-# Download data
-@st.cache_data
-def get_data(ticker, start_date, end_date):
-    data = yf.download(ticker, start=start_date, end=end_date)
-    return data
-
-data = get_data(ticker, start_date, end_date)
+# Download historical data
+end_date = pd.Timestamp.now()
+start_date = end_date - pd.DateOffset(years=years)
+data = yf.download(ticker, start=start_date, end=end_date)
 
 # Calculate indicators
-def calculate_indicator(data, indicator):
-    if indicator == "MACD":
-        macd = ta.trend.MACD(data['Close'], fast_period, slow_period, signal_period)
-        data['MACD'] = macd.macd()
-        data['Signal'] = macd.macd_signal()
-        data['MACD_Hist'] = macd.macd_diff()
-        data['Buy_Signal'] = (data['MACD'] > data['Signal']) & (data['MACD'].shift(1) <= data['Signal'].shift(1))
-        data['Sell_Signal'] = (data['MACD'] < data['Signal']) & (data['MACD'].shift(1) >= data['Signal'].shift(1))
-    elif indicator == "RSI":
-        data['RSI'] = ta.momentum.RSIIndicator(data['Close'], rsi_period).rsi()
-        data['Buy_Signal'] = (data['RSI'] < oversold) & (data['RSI'].shift(1) >= oversold)
-        data['Sell_Signal'] = (data['RSI'] > overbought) & (data['RSI'].shift(1) <= overbought)
-    elif indicator == "ATR":
-        atr = ta.volatility.AverageTrueRange(data['High'], data['Low'], data['Close'], atr_period).average_true_range()
-        data['Upper_Band'] = data['Close'] + atr * atr_multiplier
-        data['Lower_Band'] = data['Close'] - atr * atr_multiplier
-        data['Buy_Signal'] = (data['Close'] > data['Upper_Band']) & (data['Close'].shift(1) <= data['Upper_Band'].shift(1))
-        data['Sell_Signal'] = (data['Close'] < data['Lower_Band']) & (data['Close'].shift(1) >= data['Lower_Band'].shift(1))
-    return data
+if indicator == "MACD":
+    data['MACD'] = ta.trend.macd(data['Close'], fast_period, slow_period, signal_period)
+    data['Signal'] = ta.trend.macd_signal(data['Close'], fast_period, slow_period, signal_period)
+elif indicator == "RSI":
+    data['RSI'] = ta.momentum.rsi(data['Close'], window=rsi_period)
+elif indicator == "ATR":
+    data['ATR'] = ta.volatility.average_true_range(data['High'], data['Low'], data['Close'], window=atr_period)
+    data['Upper_Band'] = data['Close'] + atr_multiplier * data['ATR']
+    data['Lower_Band'] = data['Close'] - atr_multiplier * data['ATR']
 
-data = calculate_indicator(data, indicator)
+# Generate trading signals
+data['Signal'] = 0
+if indicator == "MACD":
+    data.loc[data['MACD'] > data['Signal'], 'Signal'] = 1
+    data.loc[data['MACD'] < data['Signal'], 'Signal'] = -1
+elif indicator == "RSI":
+    data.loc[data['RSI'] < oversold, 'Signal'] = 1
+    data.loc[data['RSI'] > overbought, 'Signal'] = -1
+elif indicator == "ATR":
+    data.loc[data['Close'] > data['Upper_Band'].shift(1), 'Signal'] = 1
+    data.loc[data['Close'] < data['Lower_Band'].shift(1), 'Signal'] = -1
 
-# Backtesting
-def backtest(data):
-    position = 0
-    trades = []
-    for i in range(len(data)):
-        if data['Buy_Signal'].iloc[i] and position == 0:
-            position = 1
-            entry_price = data['Close'].iloc[i]
-            entry_date = data.index[i]
-        elif data['Sell_Signal'].iloc[i] and position == 1:
-            position = 0
-            exit_price = data['Close'].iloc[i]
-            exit_date = data.index[i]
-            profit = (exit_price - entry_price) / entry_price
-            trades.append({
-                'Entry Date': entry_date,
-                'Entry Price': entry_price,
-                'Exit Date': exit_date,
-                'Exit Price': exit_price,
-                'Profit': profit
-            })
-    
-    trades_df = pd.DataFrame(trades)
-    trades_df['Cumulative Profit'] = (1 + trades_df['Profit']).cumprod() - 1
-    
-    strategy_returns = data['Close'].pct_change()
-    strategy_returns[data['Buy_Signal']] = 0
-    strategy_returns = (1 + strategy_returns).cumprod() - 1
-    
-    buy_and_hold_returns = (data['Close'] / data['Close'].iloc[0]) - 1
-    
-    return trades_df, strategy_returns, buy_and_hold_returns
+# Calculate returns
+data['Returns'] = data['Close'].pct_change()
+data['Strategy_Returns'] = data['Signal'].shift(1) * data['Returns']
+data['Cumulative_Returns'] = (1 + data['Strategy_Returns']).cumprod()
+data['Buy_and_Hold_Returns'] = (1 + data['Returns']).cumprod()
 
-trades_df, strategy_returns, buy_and_hold_returns = backtest(data)
+# Create interactive plot
+fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05, 
+                    subplot_titles=('Stock Price', 'Profit/Loss', 'Indicator'))
 
-# Plotting
-fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 16), sharex=True)
-
-# Price chart
-ax1.plot(data.index, data['Close'], label='Close Price')
-ax1.set_title(f"{ticker} Price Chart")
-ax1.legend()
+# Stock price chart
+fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name='Close Price'), row=1, col=1)
 
 # Profit/Loss chart
-ax2.plot(strategy_returns.index, strategy_returns, label='Strategy Returns')
-ax2.plot(buy_and_hold_returns.index, buy_and_hold_returns, label='Buy and Hold Returns')
-ax2.set_title("Profit/Loss Chart")
-ax2.legend()
+fig.add_trace(go.Scatter(x=data.index, y=data['Cumulative_Returns'], name='Strategy Returns'), row=2, col=1)
+fig.add_trace(go.Scatter(x=data.index, y=data['Buy_and_Hold_Returns'], name='Buy and Hold Returns'), row=2, col=1)
 
 # Indicator chart
 if indicator == "MACD":
-    ax3.plot(data.index, data['MACD'], label='MACD')
-    ax3.plot(data.index, data['Signal'], label='Signal')
-    ax3.bar(data.index, data['MACD_Hist'], label='MACD Histogram')
+    fig.add_trace(go.Scatter(x=data.index, y=data['MACD'], name='MACD'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Signal'], name='Signal Line'), row=3, col=1)
 elif indicator == "RSI":
-    ax3.plot(data.index, data['RSI'], label='RSI')
-    ax3.axhline(y=overbought, color='r', linestyle='--')
-    ax3.axhline(y=oversold, color='g', linestyle='--')
+    fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], name='RSI'), row=3, col=1)
+    fig.add_hline(y=overbought, line_dash="dash", line_color="red", row=3, col=1)
+    fig.add_hline(y=oversold, line_dash="dash", line_color="green", row=3, col=1)
 elif indicator == "ATR":
-    ax3.plot(data.index, data['Upper_Band'], label='Upper Band')
-    ax3.plot(data.index, data['Lower_Band'], label='Lower Band')
-    ax3.plot(data.index, data['Close'], label='Close Price')
+    fig.add_trace(go.Scatter(x=data.index, y=data['ATR'], name='ATR'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Upper_Band'], name='Upper Band'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Lower_Band'], name='Lower Band'), row=3, col=1)
 
-ax3.set_title(f"{indicator} Chart")
-ax3.legend()
+# Add buy/sell marks
+buy_signals = data[data['Signal'] == 1]
+sell_signals = data[data['Signal'] == -1]
+fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals['Close'], mode='markers', 
+                         marker=dict(symbol='triangle-up', size=10, color='green'), name='Buy'), row=1, col=1)
+fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals['Close'], mode='markers', 
+                         marker=dict(symbol='triangle-down', size=10, color='red'), name='Sell'), row=1, col=1)
 
-# Plot buy/sell signals
-buy_signals = data[data['Buy_Signal']]
-sell_signals = data[data['Sell_Signal']]
-ax1.scatter(buy_signals.index, buy_signals['Close'], color='green', marker='^', s=100)
-ax1.scatter(sell_signals.index, sell_signals['Close'], color='red', marker='v', s=100)
+fig.update_layout(height=900, title_text=f"{ticker} - {indicator} Strategy Backtest")
+st.plotly_chart(fig, use_container_width=True)
 
-st.pyplot(fig)
+# Create trade details table
+trades = data[data['Signal'] != 0].copy()
+trades['Trade_Type'] = trades['Signal'].map({1: 'Buy', -1: 'Sell'})
+trades['Holding_Period'] = trades.index.to_series().diff().dt.days
+trades['Realized_Gain_Loss'] = trades['Strategy_Returns'].cumsum()
+trades['Cumulative_Gain_Loss'] = trades['Realized_Gain_Loss'].cumsum()
 
-# Display trade details
 st.subheader("Trade Details")
-st.dataframe(trades_df)
+st.dataframe(trades[['Trade_Type', 'Close', 'Holding_Period', 'Realized_Gain_Loss', 'Cumulative_Gain_Loss']])
 
-# Display summary statistics
-st.subheader("Summary Statistics")
-total_trades = len(trades_df)
-profitable_trades = len(trades_df[trades_df['Profit'] > 0])
-loss_making_trades = len(trades_df[trades_df['Profit'] < 0])
-win_rate = profitable_trades / total_trades if total_trades > 0 else 0
-average_profit = trades_df['Profit'].mean() if total_trades > 0 else 0
-total_return = trades_df['Cumulative Profit'].iloc[-1] if total_trades > 0 else 0
+# Display performance metrics
+total_return = data['Cumulative_Returns'].iloc[-1] - 1
+buy_hold_return = data['Buy_and_Hold_Returns'].iloc[-1] - 1
+sharpe_ratio = data['Strategy_Returns'].mean() / data['Strategy_Returns'].std() * (252 ** 0.5)
 
-st.write(f"Total Trades: {total_trades}")
-st.write(f"Profitable Trades: {profitable_trades}")
-st.write(f"Loss-making Trades: {loss_making_trades}")
-st.write(f"Win Rate: {win_rate:.2%}")
-st.write(f"Average Profit per Trade: {average_profit:.2%}")
-st.write(f"Total Return: {total_return:.2%}")
+st.subheader("Performance Metrics")
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Return", f"{total_return:.2%}")
+col2.metric("Buy & Hold Return", f"{buy_hold_return:.2%}")
+col3.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
