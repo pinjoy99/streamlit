@@ -1,147 +1,148 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from ta import add_all_ta_features
+import ta
 from datetime import datetime, timedelta
 
-# Function to get top 20 most traded stocks and ETFs
-def get_top_tickers():
-    # This is a placeholder. In a real app, you'd fetch this data from a reliable source.
-    return ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'FB', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V',
-            'SPY', 'QQQ', 'IWM', 'EEM', 'GLD', 'VTI', 'VOO', 'IVV', 'EFA', 'XLF']
+# Define the list of top 20 most traded stocks and ETFs
+TOP_TICKERS = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'FB', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'PG', 'UNH', 'HD', 'BAC', 'MA', 'DIS', 'ADBE', 'CRM', 'NFLX', 'SPY']
 
-# Function to download stock data
+# Sidebar inputs
+st.sidebar.title("Stock Trading Strategy Backtester")
+ticker = st.sidebar.selectbox("Select a stock ticker", TOP_TICKERS)
+end_date = datetime.now().date()
+start_date = st.sidebar.date_input("Select start date", end_date - timedelta(days=4*365))
+
+# Strategy selection
+strategy = st.sidebar.selectbox("Select a strategy", ["MACD", "RSI", "ATR"])
+
+# Strategy parameters
+if strategy == "MACD":
+    fast_period = st.sidebar.slider("Fast period", 5, 50, 12)
+    slow_period = st.sidebar.slider("Slow period", 10, 100, 26)
+    signal_period = st.sidebar.slider("Signal period", 5, 20, 9)
+elif strategy == "RSI":
+    rsi_period = st.sidebar.slider("RSI period", 5, 30, 14)
+    overbought = st.sidebar.slider("Overbought level", 70, 90, 70)
+    oversold = st.sidebar.slider("Oversold level", 10, 30, 30)
+elif strategy == "ATR":
+    atr_period = st.sidebar.slider("ATR period", 5, 30, 14)
+    atr_multiplier = st.sidebar.slider("ATR multiplier", 1.0, 5.0, 2.0, 0.1)
+
+# Download data
+@st.cache_data
 def download_data(ticker, start_date, end_date):
     data = yf.download(ticker, start=start_date, end=end_date)
     return data
 
-# Function to implement trading strategy
-def implement_strategy(data, indicator, buy_threshold, sell_threshold):
-    if indicator == 'MACD':
-        data['MACD'] = data['Close'].ewm(span=12).mean() - data['Close'].ewm(span=26).mean()
-        data['Signal'] = data['MACD'].ewm(span=9).mean()
-        data['Buy'] = (data['MACD'] > data['Signal']) & (data['MACD'].shift(1) <= data['Signal'].shift(1))
-        data['Sell'] = (data['MACD'] < data['Signal']) & (data['MACD'].shift(1) >= data['Signal'].shift(1))
-    elif indicator == 'RSI':
-        data['RSI'] = ta.momentum.rsi(data['Close'], window=14)
-        data['Buy'] = (data['RSI'] < buy_threshold) & (data['RSI'].shift(1) >= buy_threshold)
-        data['Sell'] = (data['RSI'] > sell_threshold) & (data['RSI'].shift(1) <= sell_threshold)
-    elif indicator == 'ATR':
-        data['ATR'] = ta.volatility.average_true_range(data['High'], data['Low'], data['Close'], window=14)
-        data['Upper'] = data['Close'] + 2 * data['ATR']
-        data['Lower'] = data['Close'] - 2 * data['ATR']
-        data['Buy'] = data['Close'] < data['Lower']
-        data['Sell'] = data['Close'] > data['Upper']
-    
-    return data
-
-# Function to calculate strategy performance
-def calculate_performance(data):
-    data['Position'] = 0
-    data.loc[data['Buy'], 'Position'] = 1
-    data.loc[data['Sell'], 'Position'] = 0
-    data['Position'] = data['Position'].fillna(method='ffill')
-    
-    data['Strategy'] = data['Position'].shift(1) * data['Close'].pct_change()
-    data['Benchmark'] = data['Close'].pct_change()
-    
-    data['Strategy_Cum'] = (1 + data['Strategy']).cumprod()
-    data['Benchmark_Cum'] = (1 + data['Benchmark']).cumprod()
-    
-    return data
-
-# Function to create interactive plot
-def create_plot(data, ticker):
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
-                        subplot_titles=(f'{ticker} Price', 'Cumulative Returns', 'Indicator'))
-    
-    fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name='Close Price'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data[data['Buy']].index, y=data[data['Buy']]['Close'], 
-                             mode='markers', name='Buy Signal', marker=dict(color='green', symbol='triangle-up', size=10)), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data[data['Sell']].index, y=data[data['Sell']]['Close'], 
-                             mode='markers', name='Sell Signal', marker=dict(color='red', symbol='triangle-down', size=10)), row=1, col=1)
-    
-    fig.add_trace(go.Scatter(x=data.index, y=data['Strategy_Cum'], name='Strategy'), row=2, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=data['Benchmark_Cum'], name='Benchmark'), row=2, col=1)
-    
-    if 'MACD' in data.columns:
-        fig.add_trace(go.Scatter(x=data.index, y=data['MACD'], name='MACD'), row=3, col=1)
-        fig.add_trace(go.Scatter(x=data.index, y=data['Signal'], name='Signal'), row=3, col=1)
-    elif 'RSI' in data.columns:
-        fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], name='RSI'), row=3, col=1)
-    elif 'ATR' in data.columns:
-        fig.add_trace(go.Scatter(x=data.index, y=data['ATR'], name='ATR'), row=3, col=1)
-    
-    fig.update_layout(height=900, title_text=f"{ticker} Trading Strategy Backtest")
-    return fig
-
-# Function to calculate trade details
-def calculate_trade_details(data):
-    trades = pd.DataFrame(columns=['Entry Date', 'Exit Date', 'Entry Price', 'Exit Price', 'Profit/Loss', 'Cumulative P/L'])
-    
-    in_position = False
-    entry_date = None
-    entry_price = None
-    cumulative_pl = 0
-    
-    for index, row in data.iterrows():
-        if not in_position and row['Buy']:
-            in_position = True
-            entry_date = index
-            entry_price = row['Close']
-        elif in_position and row['Sell']:
-            in_position = False
-            exit_date = index
-            exit_price = row['Close']
-            profit_loss = (exit_price - entry_price) / entry_price
-            cumulative_pl += profit_loss
-            trades = trades.append({
-                'Entry Date': entry_date,
-                'Exit Date': exit_date,
-                'Entry Price': entry_price,
-                'Exit Price': exit_price,
-                'Profit/Loss': f"{profit_loss:.2%}",
-                'Cumulative P/L': f"{cumulative_pl:.2%}"
-            }, ignore_index=True)
-    
-    return trades
-
-# Streamlit app
-st.title('Stock Trading Strategy Backtester')
-
-# Sidebar
-st.sidebar.header('Input Parameters')
-ticker = st.sidebar.selectbox('Select Stock Ticker', get_top_tickers())
-end_date = datetime.now()
-start_date = st.sidebar.date_input('Start Date', end_date - timedelta(days=4*365))
-end_date = st.sidebar.date_input('End Date', end_date)
-indicator = st.sidebar.selectbox('Select Indicator', ['MACD', 'RSI', 'ATR'])
-buy_threshold = st.sidebar.slider('Buy Threshold', 0, 100, 30)
-sell_threshold = st.sidebar.slider('Sell Threshold', 0, 100, 70)
-
-# Download data
 data = download_data(ticker, start_date, end_date)
 
-# Implement strategy
-data = implement_strategy(data, indicator, buy_threshold, sell_threshold)
+# Calculate indicators and signals
+if strategy == "MACD":
+    macd = ta.trend.MACD(data['Close'], fast_period, slow_period, signal_period)
+    data['MACD'] = macd.macd()
+    data['Signal'] = macd.macd_signal()
+    data['Buy'] = (data['MACD'] > data['Signal']) & (data['MACD'].shift(1) <= data['Signal'].shift(1))
+    data['Sell'] = (data['MACD'] < data['Signal']) & (data['MACD'].shift(1) >= data['Signal'].shift(1))
+elif strategy == "RSI":
+    data['RSI'] = ta.momentum.RSIIndicator(data['Close'], rsi_period).rsi()
+    data['Buy'] = (data['RSI'] < oversold) & (data['RSI'].shift(1) >= oversold)
+    data['Sell'] = (data['RSI'] > overbought) & (data['RSI'].shift(1) <= overbought)
+elif strategy == "ATR":
+    atr = ta.volatility.AverageTrueRange(data['High'], data['Low'], data['Close'], atr_period).average_true_range()
+    data['Upper'] = data['Close'] + atr_multiplier * atr
+    data['Lower'] = data['Close'] - atr_multiplier * atr
+    data['Buy'] = (data['Close'] > data['Upper']) & (data['Close'].shift(1) <= data['Upper'].shift(1))
+    data['Sell'] = (data['Close'] < data['Lower']) & (data['Close'].shift(1) >= data['Lower'].shift(1))
 
-# Calculate performance
-data = calculate_performance(data)
+# Backtesting
+initial_balance = 10000
+balance = initial_balance
+shares = 0
+trades = []
 
-# Create plot
-fig = create_plot(data, ticker)
-st.plotly_chart(fig)
+for i in range(len(data)):
+    if data['Buy'].iloc[i] and balance > 0:
+        shares_to_buy = balance // data['Close'].iloc[i]
+        cost = shares_to_buy * data['Close'].iloc[i]
+        shares += shares_to_buy
+        balance -= cost
+        trades.append({
+            'Date': data.index[i],
+            'Action': 'Buy',
+            'Price': data['Close'].iloc[i],
+            'Shares': shares_to_buy,
+            'Cost/Proceeds': cost,
+            'Balance': balance,
+            'Shares Held': shares,
+            'Realized Gain/Loss': 0,
+            'Cumulative Gain/Loss': (balance + shares * data['Close'].iloc[i]) - initial_balance
+        })
+    elif data['Sell'].iloc[i] and shares > 0:
+        proceeds = shares * data['Close'].iloc[i]
+        realized_gain = proceeds - (shares * trades[-1]['Price'])
+        balance += proceeds
+        shares = 0
+        trades.append({
+            'Date': data.index[i],
+            'Action': 'Sell',
+            'Price': data['Close'].iloc[i],
+            'Shares': shares,
+            'Cost/Proceeds': proceeds,
+            'Balance': balance,
+            'Shares Held': 0,
+            'Realized Gain/Loss': realized_gain,
+            'Cumulative Gain/Loss': balance - initial_balance
+        })
 
-# Display trade details
-st.subheader('Trade Details')
-trade_details = calculate_trade_details(data)
-st.table(trade_details)
+# Calculate strategy performance
+strategy_value = balance + shares * data['Close'].iloc[-1]
+strategy_return = (strategy_value - initial_balance) / initial_balance * 100
 
-# Display overall performance
-st.subheader('Overall Performance')
-total_return = data['Strategy_Cum'].iloc[-1] - 1
-benchmark_return = data['Benchmark_Cum'].iloc[-1] - 1
-st.write(f"Strategy Total Return: {total_return:.2%}")
-st.write(f"Benchmark Total Return: {benchmark_return:.2%}")
+# Calculate buy-and-hold performance
+buy_and_hold_shares = initial_balance // data['Close'].iloc[0]
+buy_and_hold_value = buy_and_hold_shares * data['Close'].iloc[-1]
+buy_and_hold_return = (buy_and_hold_value - initial_balance) / initial_balance * 100
+
+# Create interactive plot
+fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_heights=[0.5, 0.3, 0.2])
+
+# Stock price chart with buy/sell markers
+fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name='Stock Price'), row=1, col=1)
+fig.add_trace(go.Scatter(x=data[data['Buy']].index, y=data[data['Buy']]['Close'], mode='markers', name='Buy Signal', marker=dict(symbol='triangle-up', size=10, color='green')), row=1, col=1)
+fig.add_trace(go.Scatter(x=data[data['Sell']].index, y=data[data['Sell']]['Close'], mode='markers', name='Sell Signal', marker=dict(symbol='triangle-down', size=10, color='red')), row=1, col=1)
+
+# Profit chart
+trade_dates = [trade['Date'] for trade in trades]
+cumulative_gains = [trade['Cumulative Gain/Loss'] for trade in trades]
+fig.add_trace(go.Scatter(x=trade_dates, y=cumulative_gains, name='Strategy Profit'), row=2, col=1)
+fig.add_trace(go.Scatter(x=data.index, y=(data['Close'] / data['Close'].iloc[0] - 1) * initial_balance, name='Buy and Hold'), row=2, col=1)
+
+# Indicator chart
+if strategy == "MACD":
+    fig.add_trace(go.Scatter(x=data.index, y=data['MACD'], name='MACD'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Signal'], name='Signal'), row=3, col=1)
+elif strategy == "RSI":
+    fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], name='RSI'), row=3, col=1)
+    fig.add_hline(y=overbought, line_dash="dash", line_color="red", row=3, col=1)
+    fig.add_hline(y=oversold, line_dash="dash", line_color="green", row=3, col=1)
+elif strategy == "ATR":
+    fig.add_trace(go.Scatter(x=data.index, y=data['Upper'], name='Upper Band'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Lower'], name='Lower Band'), row=3, col=1)
+
+fig.update_layout(height=800, title_text=f"{ticker} - {strategy} Strategy Backtest")
+st.plotly_chart(fig, use_container_width=True)
+
+# Display performance metrics
+st.subheader("Performance Metrics")
+col1, col2 = st.columns(2)
+col1.metric("Strategy Return", f"{strategy_return:.2f}%")
+col2.metric("Buy and Hold Return", f"{buy_and_hold_return:.2f}%")
+
+# Display trade details table
+st.subheader("Trade Details")
+trade_df = pd.DataFrame(trades)
+st.dataframe(trade_df)
