@@ -10,3 +10,4 @@ altair
 mpld3
 seaborn
 ta
+talib
