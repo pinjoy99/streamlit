@@ -8,145 +8,117 @@ from ta.trend import MACD
 from ta.momentum import RSIIndicator
 from ta.volatility import AverageTrueRange
 
-# Function to download stock data
-def get_stock_data(ticker, start_date, end_date):
-    return yf.download(ticker, start=start_date, end=end_date)
+# Sidebar inputs
+st.sidebar.header("Stock Selection")
+ticker = st.sidebar.text_input("Enter stock ticker", value="AAPL")
+start_date = st.sidebar.date_input("Start date")
+end_date = st.sidebar.date_input("End date")
 
-# Function to calculate indicators
-def calculate_indicator(data, indicator, **kwargs):
-    if indicator == 'MACD':
-        macd = MACD(data['Close'], **kwargs)
-        return macd.macd(), macd.macd_signal()
-    elif indicator == 'RSI':
-        rsi = RSIIndicator(data['Close'], **kwargs)
-        return rsi.rsi()
-    elif indicator == 'ATR':
-        atr = AverageTrueRange(data['High'], data['Low'], data['Close'], **kwargs)
-        return atr.average_true_range()
+st.sidebar.header("Strategy Parameters")
+indicator = st.sidebar.selectbox("Select indicator", ["MACD", "RSI", "ATR"])
 
-# Function to implement trading strategy
-def implement_strategy(data, indicator_values, indicator_type):
-    buy_signals = []
-    sell_signals = []
-    position = 0
-    
-    if indicator_type == 'MACD':
-        macd, signal = indicator_values
-        for i in range(len(data)):
-            if macd[i] > signal[i] and position == 0:
-                buy_signals.append(data['Close'].iloc[i])
-                sell_signals.append(np.nan)
-                position = 1
-            elif macd[i] < signal[i] and position == 1:
-                sell_signals.append(data['Close'].iloc[i])
-                buy_signals.append(np.nan)
-                position = 0
-            else:
-                buy_signals.append(np.nan)
-                sell_signals.append(np.nan)
-    elif indicator_type == 'RSI':
-        for i in range(len(data)):
-            if indicator_values[i] < 30 and position == 0:
-                buy_signals.append(data['Close'].iloc[i])
-                sell_signals.append(np.nan)
-                position = 1
-            elif indicator_values[i] > 70 and position == 1:
-                sell_signals.append(data['Close'].iloc[i])
-                buy_signals.append(np.nan)
-                position = 0
-            else:
-                buy_signals.append(np.nan)
-                sell_signals.append(np.nan)
-    elif indicator_type == 'ATR':
-        for i in range(len(data)):
-            if indicator_values[i] > data['Close'].iloc[i] * 0.02 and position == 0:  # Buy if ATR > 2% of price
-                buy_signals.append(data['Close'].iloc[i])
-                sell_signals.append(np.nan)
-                position = 1
-            elif indicator_values[i] < data['Close'].iloc[i] * 0.01 and position == 1:  # Sell if ATR < 1% of price
-                sell_signals.append(data['Close'].iloc[i])
-                buy_signals.append(np.nan)
-                position = 0
-            else:
-                buy_signals.append(np.nan)
-                sell_signals.append(np.nan)
-    
-    return buy_signals, sell_signals
+if indicator == "MACD":
+    fast_period = st.sidebar.slider("Fast period", 5, 50, 12)
+    slow_period = st.sidebar.slider("Slow period", 10, 100, 26)
+    signal_period = st.sidebar.slider("Signal period", 5, 20, 9)
+elif indicator == "RSI":
+    rsi_period = st.sidebar.slider("RSI period", 5, 30, 14)
+    oversold = st.sidebar.slider("Oversold threshold", 10, 40, 30)
+    overbought = st.sidebar.slider("Overbought threshold", 60, 90, 70)
+elif indicator == "ATR":
+    atr_period = st.sidebar.slider("ATR period", 5, 30, 14)
+    atr_multiplier = st.sidebar.slider("ATR multiplier", 1.0, 5.0, 2.0, 0.1)
 
-# Function to calculate profit/loss
-def calculate_pnl(data, buy_signals, sell_signals):
-    pnl = [0]
-    position = 0
-    entry_price = 0
-    for i in range(1, len(data)):
-        if not np.isnan(buy_signals[i]) and position == 0:
-            entry_price = buy_signals[i]
-            position = 1
-        elif not np.isnan(sell_signals[i]) and position == 1:
-            pnl.append(pnl[-1] + (sell_signals[i] - entry_price))
-            position = 0
-        else:
-            pnl.append(pnl[-1])
-    return pnl
+# Download data
+@st.cache_data
+def download_data(ticker, start_date, end_date):
+    data = yf.download(ticker, start=start_date, end=end_date)
+    return data
 
-# Streamlit app
-st.title('Stock Trading Strategy Backtester')
+data = download_data(ticker, start_date, end_date)
 
-# User inputs
-ticker = st.text_input('Enter stock ticker (e.g., AAPL)', 'AAPL')
-start_date = st.date_input('Start date')
-end_date = st.date_input('End date')
-indicator = st.selectbox('Select indicator', ['MACD', 'RSI', 'ATR'])
+# Calculate indicators and generate signals
+def calculate_signals(data, indicator):
+    if indicator == "MACD":
+        macd = MACD(data['Close'], fast_period, slow_period, signal_period)
+        data['MACD'] = macd.macd()
+        data['Signal'] = macd.macd_signal()
+        data['Buy'] = (data['MACD'] > data['Signal']) & (data['MACD'].shift(1) <= data['Signal'].shift(1))
+        data['Sell'] = (data['MACD'] < data['Signal']) & (data['MACD'].shift(1) >= data['Signal'].shift(1))
+    elif indicator == "RSI":
+        rsi = RSIIndicator(data['Close'], rsi_period)
+        data['RSI'] = rsi.rsi()
+        data['Buy'] = (data['RSI'] < oversold) & (data['RSI'].shift(1) >= oversold)
+        data['Sell'] = (data['RSI'] > overbought) & (data['RSI'].shift(1) <= overbought)
+    elif indicator == "ATR":
+        atr = AverageTrueRange(data['High'], data['Low'], data['Close'], atr_period)
+        data['ATR'] = atr.average_true_range()
+        data['Upper'] = data['Close'] + atr_multiplier * data['ATR']
+        data['Lower'] = data['Close'] - atr_multiplier * data['ATR']
+        data['Buy'] = (data['Close'] > data['Upper']) & (data['Close'].shift(1) <= data['Upper'].shift(1))
+        data['Sell'] = (data['Close'] < data['Lower']) & (data['Close'].shift(1) >= data['Lower'].shift(1))
+    return data
 
-if st.button('Run Backtest'):
-    # Download data
-    data = get_stock_data(ticker, start_date, end_date)
-    
-    # Calculate indicator
-    if indicator == 'MACD':
-        indicator_values = calculate_indicator(data, indicator)
-    else:
-        indicator_values = calculate_indicator(data, indicator)
-    
-    # Implement strategy
-    buy_signals, sell_signals = implement_strategy(data, indicator_values, indicator)
-    
-    # Calculate profit/loss
-    pnl = calculate_pnl(data, buy_signals, sell_signals)
-    
-    # Create subplots
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
-                        subplot_titles=('Stock Price', 'Profit/Loss', f'{indicator} Indicator'))
-    
-    # Stock price chart with buy/sell markers
-    fig.add_trace(go.Candlestick(x=data.index, open=data['Open'], high=data['High'],
-                                 low=data['Low'], close=data['Close'], name='Price'),
-                  row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=buy_signals, mode='markers',
-                             marker=dict(symbol='triangle-up', size=10, color='green'),
-                             name='Buy Signal'),
-                  row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=sell_signals, mode='markers',
-                             marker=dict(symbol='triangle-down', size=10, color='red'),
-                             name='Sell Signal'),
-                  row=1, col=1)
-    
-    # Profit/Loss chart
-    fig.add_trace(go.Scatter(x=data.index, y=pnl, name='Profit/Loss'),
-                  row=2, col=1)
-    
-    # Indicator chart
-    if indicator == 'MACD':
-        fig.add_trace(go.Scatter(x=data.index, y=indicator_values[0], name='MACD'),
-                      row=3, col=1)
-        fig.add_trace(go.Scatter(x=data.index, y=indicator_values[1], name='Signal'),
-                      row=3, col=1)
-    else:
-        fig.add_trace(go.Scatter(x=data.index, y=indicator_values, name=indicator),
-                      row=3, col=1)
-    
-    fig.update_layout(height=900, title_text=f'{ticker} Backtest Results')
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Display final profit/loss
-    st.write(f'Final Profit/Loss: ${pnl[-1]:.2f}')
+data = calculate_signals(data, indicator)
+
+# Backtest strategy
+def backtest_strategy(data):
+    data['Position'] = np.nan
+    data.loc[data['Buy'], 'Position'] = 1
+    data.loc[data['Sell'], 'Position'] = 0
+    data['Position'] = data['Position'].ffill().fillna(0)
+    data['Returns'] = data['Close'].pct_change()
+    data['Strategy_Returns'] = data['Position'].shift(1) * data['Returns']
+    data['Cumulative_Returns'] = (1 + data['Strategy_Returns']).cumprod()
+    data['Drawdown'] = (data['Cumulative_Returns'].cummax() - data['Cumulative_Returns']) / data['Cumulative_Returns'].cummax()
+    return data
+
+data = backtest_strategy(data)
+
+# Create subplots
+fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05, subplot_titles=("Stock Price", "Profit/Loss", f"{indicator} Indicator"))
+
+# Stock price chart
+fig.add_trace(go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name="Price"), row=1, col=1)
+fig.add_trace(go.Scatter(x=data.index[data['Buy']], y=data.loc[data['Buy'], 'Close'], mode='markers', marker=dict(symbol='triangle-up', size=10, color='green'), name='Buy Signal'), row=1, col=1)
+fig.add_trace(go.Scatter(x=data.index[data['Sell']], y=data.loc[data['Sell'], 'Close'], mode='markers', marker=dict(symbol='triangle-down', size=10, color='red'), name='Sell Signal'), row=1, col=1)
+
+# Profit/Loss chart
+fig.add_trace(go.Scatter(x=data.index, y=data['Cumulative_Returns'], name="Cumulative Returns"), row=2, col=1)
+
+# Indicator chart
+if indicator == "MACD":
+    fig.add_trace(go.Scatter(x=data.index, y=data['MACD'], name="MACD"), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Signal'], name="Signal"), row=3, col=1)
+elif indicator == "RSI":
+    fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], name="RSI"), row=3, col=1)
+    fig.add_hline(y=oversold, line_dash="dash", line_color="green", row=3, col=1)
+    fig.add_hline(y=overbought, line_dash="dash", line_color="red", row=3, col=1)
+elif indicator == "ATR":
+    fig.add_trace(go.Scatter(x=data.index, y=data['Upper'], name="Upper Band"), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Lower'], name="Lower Band"), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name="Close Price"), row=3, col=1)
+
+fig.update_layout(height=900, title_text=f"Backtest Results for {ticker}")
+st.plotly_chart(fig, use_container_width=True)
+
+# Trade details table
+trades = data[data['Position'] != data['Position'].shift(1)].copy()
+trades['Trade_Type'] = np.where(trades['Position'] == 1, 'Buy', 'Sell')
+trades['Price'] = trades['Close']
+trades['Profit/Loss'] = trades['Close'].diff()
+trades['Cumulative_Profit/Loss'] = trades['Profit/Loss'].cumsum()
+
+st.subheader("Trade Details")
+st.dataframe(trades[['Trade_Type', 'Price', 'Profit/Loss', 'Cumulative_Profit/Loss']])
+
+# Performance metrics
+total_return = data['Cumulative_Returns'].iloc[-1] - 1
+sharpe_ratio = data['Strategy_Returns'].mean() / data['Strategy_Returns'].std() * np.sqrt(252)
+max_drawdown = data['Drawdown'].max()
+
+st.subheader("Performance Metrics")
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Return", f"{total_return:.2%}")
+col2.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
+col3.metric("Max Drawdown", f"{max_drawdown:.2%}")
