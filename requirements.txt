@@ -10,4 +10,4 @@ altair
 mpld3
 seaborn
 ta
-
+pandas-ta
