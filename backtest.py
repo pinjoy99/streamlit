@@ -22,7 +22,7 @@ years = st.sidebar.number_input("Number of years of historical data", min_value=
 end_date = pd.Timestamp.now()
 start_date = end_date - pd.DateOffset(years=years)
 
-indicator = st.sidebar.selectbox("Select an indicator", ["MACD", "RSI", "ATR"])
+indicator = st.sidebar.selectbox("Select an indicator", ["MACD", "RSI", "ATR", "SMA Crossover"])
 
 if indicator == "MACD":
     fast_period = st.sidebar.slider("Fast period", 5, 50, 12)
@@ -35,6 +35,9 @@ elif indicator == "RSI":
 elif indicator == "ATR":
     atr_period = st.sidebar.slider("ATR period", 5, 30, 14)
     atr_multiplier = st.sidebar.slider("ATR multiplier", 1.0, 5.0, 2.0, 0.1)
+elif indicator == "SMA Crossover":
+    short_window = st.sidebar.slider("Short SMA window", 5, 50, 10)
+    long_window = st.sidebar.slider("Long SMA window", 20, 100, 30)
 
 # Download data
 @st.cache_data
@@ -63,6 +66,11 @@ elif indicator == "ATR":
     data['Lower'] = data['Close'].rolling(window=atr_period).mean() - atr_multiplier * data['ATR']
     data['Buy'] = (data['Close'] > data['Upper']) & (data['Close'].shift(1) <= data['Upper'].shift(1))
     data['Sell'] = (data['Close'] < data['Lower']) & (data['Close'].shift(1) >= data['Lower'].shift(1))
+elif indicator == "SMA Crossover":
+    data['SMA_Short'] = data['Close'].rolling(window=short_window).mean()
+    data['SMA_Long'] = data['Close'].rolling(window=long_window).mean()
+    data['Buy'] = (data['SMA_Short'] > data['SMA_Long']) & (data['SMA_Short'].shift(1) <= data['SMA_Long'].shift(1))
+    data['Sell'] = (data['SMA_Short'] < data['SMA_Long']) & (data['SMA_Short'].shift(1) >= data['SMA_Long'].shift(1))
 
 # Backtesting
 data['Position'] = np.nan
@@ -103,6 +111,9 @@ elif indicator == "ATR":
     fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name="Close"), row=3, col=1)
     fig.add_trace(go.Scatter(x=data.index, y=data['Upper'], name="Upper Band"), row=3, col=1)
     fig.add_trace(go.Scatter(x=data.index, y=data['Lower'], name="Lower Band"), row=3, col=1)
+elif indicator == "SMA Crossover":
+    fig.add_trace(go.Scatter(x=data.index, y=data['SMA_Short'], name="SMA Short"), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['SMA_Long'], name="SMA Long"), row=3, col=1)
 
 fig.update_layout(height=900, width=800, title_text=f"{ticker} Trading Strategy Backtest")
 st.plotly_chart(fig)
