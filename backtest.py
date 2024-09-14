@@ -75,7 +75,7 @@ def backtest_strategy(data):
                 'Entry Price': entry_price,
                 'Exit Date': exit_date,
                 'Exit Price': exit_price,
-                'Profit/Loss': (exit_price - entry_price) / entry_price
+                'Profit/Loss': (exit_price - entry_price) 
             })
     
     return pd.DataFrame(trades)
