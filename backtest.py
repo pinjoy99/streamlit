@@ -4,30 +4,37 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import ta
+from ta.trend import MACD
+from ta.momentum import RSIIndicator
+from ta.volatility import AverageTrueRange
 
 # Define the list of top 30 most traded stocks and ETFs
-top_tickers = ['SPY', 'QQQ', 'IWM', 'AAPL', 'TSLA', 'NVDA', 'AMD', 'AMZN', 'MSFT', 'META', 'GOOGL', 'BAC', 'F', 'NIO', 'PLTR', 'INTC', 'AAL', 'CCL', 'SNAP', 'PFE', 'XLF', 'EEM', 'VWO', 'EFA', 'HYG', 'GDX', 'XLE', 'SLV', 'USO', 'FXI']
+top_30 = ['NVDA', 'TSLA', 'TSM', 'SOXL', 'NVDL', 'TQQQ', 'AAPL', 'AMD', 'SMCI', 'MSFT', 
+          'SQQQ', 'PLTR', 'TSLL', 'QQQ', 'AVGO', 'SOXS', 'ARM', 'MU', 'VOO', 'AMZN', 
+          'CRWD', 'INTC', 'TLT', 'META', 'MARA', 'SPY', 'GOOGL', 'NFLX', 'NVAX', 'BABA']
+
+st.title("Stock Trading Strategy Backtester")
 
 # Sidebar inputs
-st.sidebar.header('Backtest Parameters')
-ticker = st.sidebar.selectbox('Select Stock/ETF', top_tickers)
-start_date = st.sidebar.date_input('Start Date', value=pd.to_datetime('today') - pd.DateOffset(years=4))
-end_date = st.sidebar.date_input('End Date', value=pd.to_datetime('today'))
+st.sidebar.header("Settings")
+ticker = st.sidebar.selectbox("Select a stock", top_30)
+years = st.sidebar.number_input("Number of years of historical data", min_value=1, max_value=10, value=4)
+end_date = pd.Timestamp.now()
+start_date = end_date - pd.DateOffset(years=years)
 
-indicator = st.sidebar.selectbox('Select Indicator', ['MACD', 'RSI', 'ATR'])
+indicator = st.sidebar.selectbox("Select an indicator", ["MACD", "RSI", "ATR"])
 
-if indicator == 'MACD':
-    fast_period = st.sidebar.slider('Fast Period', 5, 50, 12)
-    slow_period = st.sidebar.slider('Slow Period', 10, 100, 26)
-    signal_period = st.sidebar.slider('Signal Period', 5, 20, 9)
-elif indicator == 'RSI':
-    rsi_period = st.sidebar.slider('RSI Period', 5, 30, 14)
-    overbought = st.sidebar.slider('Overbought Level', 50, 90, 70)
-    oversold = st.sidebar.slider('Oversold Level', 10, 50, 30)
-elif indicator == 'ATR':
-    atr_period = st.sidebar.slider('ATR Period', 5, 30, 14)
-    atr_multiplier = st.sidebar.slider('ATR Multiplier', 1.0, 5.0, 2.0, 0.1)
+if indicator == "MACD":
+    fast_period = st.sidebar.slider("Fast period", 5, 50, 12)
+    slow_period = st.sidebar.slider("Slow period", 10, 100, 26)
+    signal_period = st.sidebar.slider("Signal period", 5, 20, 9)
+elif indicator == "RSI":
+    rsi_period = st.sidebar.slider("RSI period", 5, 30, 14)
+    overbought = st.sidebar.slider("Overbought level", 60, 90, 70)
+    oversold = st.sidebar.slider("Oversold level", 10, 40, 30)
+elif indicator == "ATR":
+    atr_period = st.sidebar.slider("ATR period", 5, 30, 14)
+    atr_multiplier = st.sidebar.slider("ATR multiplier", 1.0, 5.0, 2.0, 0.1)
 
 # Download data
 @st.cache_data
@@ -38,98 +45,95 @@ def download_data(ticker, start_date, end_date):
 data = download_data(ticker, start_date, end_date)
 
 # Calculate indicators
-if indicator == 'MACD':
-    macd = ta.trend.MACD(data['Close'], fast_period, slow_period, signal_period)
+if indicator == "MACD":
+    macd = MACD(data['Close'], window_fast=fast_period, window_slow=slow_period, window_sign=signal_period)
     data['MACD'] = macd.macd()
     data['Signal'] = macd.macd_signal()
-    data['MACD_Hist'] = macd.macd_diff()
-    data['Buy_Signal'] = (data['MACD'] > data['Signal']) & (data['MACD'].shift(1) <= data['Signal'].shift(1))
-    data['Sell_Signal'] = (data['MACD'] < data['Signal']) & (data['MACD'].shift(1) >= data['Signal'].shift(1))
-elif indicator == 'RSI':
-    data['RSI'] = ta.momentum.RSIIndicator(data['Close'], rsi_period).rsi()
-    data['Buy_Signal'] = (data['RSI'] < oversold) & (data['RSI'].shift(1) >= oversold)
-    data['Sell_Signal'] = (data['RSI'] > overbought) & (data['RSI'].shift(1) <= overbought)
-elif indicator == 'ATR':
-    atr = ta.volatility.AverageTrueRange(data['High'], data['Low'], data['Close'], atr_period).average_true_range()
-    data['ATR'] = atr
-    data['Upper_Band'] = data['Close'] + atr_multiplier * atr
-    data['Lower_Band'] = data['Close'] - atr_multiplier * atr
-    data['Buy_Signal'] = (data['Close'] > data['Upper_Band']) & (data['Close'].shift(1) <= data['Upper_Band'].shift(1))
-    data['Sell_Signal'] = (data['Close'] < data['Lower_Band']) & (data['Close'].shift(1) >= data['Lower_Band'].shift(1))
+    data['Buy'] = (data['MACD'] > data['Signal']) & (data['MACD'].shift(1) <= data['Signal'].shift(1))
+    data['Sell'] = (data['MACD'] < data['Signal']) & (data['MACD'].shift(1) >= data['Signal'].shift(1))
+elif indicator == "RSI":
+    rsi = RSIIndicator(data['Close'], window=rsi_period)
+    data['RSI'] = rsi.rsi()
+    data['Buy'] = (data['RSI'] < oversold) & (data['RSI'].shift(1) >= oversold)
+    data['Sell'] = (data['RSI'] > overbought) & (data['RSI'].shift(1) <= overbought)
+elif indicator == "ATR":
+    atr = AverageTrueRange(data['High'], data['Low'], data['Close'], window=atr_period)
+    data['ATR'] = atr.average_true_range()
+    data['Upper'] = data['Close'].rolling(window=atr_period).mean() + atr_multiplier * data['ATR']
+    data['Lower'] = data['Close'].rolling(window=atr_period).mean() - atr_multiplier * data['ATR']
+    data['Buy'] = (data['Close'] > data['Upper']) & (data['Close'].shift(1) <= data['Upper'].shift(1))
+    data['Sell'] = (data['Close'] < data['Lower']) & (data['Close'].shift(1) >= data['Lower'].shift(1))
 
-# Backtest strategy
-def backtest_strategy(data):
-    position = 0
-    trades = []
-    for i in range(len(data)):
-        if data['Buy_Signal'].iloc[i] and position == 0:
-            position = 1
-            entry_price = data['Close'].iloc[i]
-            entry_date = data.index[i]
-        elif data['Sell_Signal'].iloc[i] and position == 1:
-            position = 0
-            exit_price = data['Close'].iloc[i]
-            exit_date = data.index[i]
-            trades.append({
-                'Entry Date': entry_date,
-                'Entry Price': entry_price,
-                'Exit Date': exit_date,
-                'Exit Price': exit_price,
-                'Profit/Loss': (exit_price - entry_price) 
-            })
-    
-    return pd.DataFrame(trades)
-
-trades = backtest_strategy(data)
+# Backtesting
+data['Position'] = np.nan
+data.loc[data['Buy'], 'Position'] = 1
+data.loc[data['Sell'], 'Position'] = 0
+data['Position'] = data['Position'].ffill().fillna(0)
+data['Strategy'] = data['Position'].shift(1) * data['Close'].pct_change()
+data['Benchmark'] = data['Close'].pct_change()
 
 # Calculate cumulative returns
-data['Strategy_Return'] = 0
-data.loc[data['Buy_Signal'], 'Strategy_Return'] = data['Close'].pct_change()
-data['Strategy_Cumulative_Return'] = (1 + data['Strategy_Return']).cumprod()
-data['Buy_and_Hold_Return'] = data['Close'].pct_change()
-data['Buy_and_Hold_Cumulative_Return'] = (1 + data['Buy_and_Hold_Return']).cumprod()
+data['Cum_Strategy'] = (1 + data['Strategy']).cumprod()
+data['Cum_Benchmark'] = (1 + data['Benchmark']).cumprod()
 
 # Create interactive plot
-fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_heights=[0.5, 0.3, 0.2])
+fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05, 
+                    subplot_titles=("Stock Price", "Cumulative Returns", f"{indicator} Indicator"))
 
-# Price chart with buy/sell markers
-fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name='Close Price'), row=1, col=1)
-fig.add_trace(go.Scatter(x=data[data['Buy_Signal']].index, y=data[data['Buy_Signal']]['Close'], mode='markers', name='Buy Signal', marker=dict(symbol='triangle-up', size=10, color='green')), row=1, col=1)
-fig.add_trace(go.Scatter(x=data[data['Sell_Signal']].index, y=data[data['Sell_Signal']]['Close'], mode='markers', name='Sell Signal', marker=dict(symbol='triangle-down', size=10, color='red')), row=1, col=1)
+# Stock price subplot
+fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name="Close Price"), row=1, col=1)
+fig.add_trace(go.Scatter(x=data[data['Buy']].index, y=data[data['Buy']]['Close'], 
+                         mode='markers', name='Buy Signal', marker=dict(color='green', symbol='triangle-up', size=10)), row=1, col=1)
+fig.add_trace(go.Scatter(x=data[data['Sell']].index, y=data[data['Sell']]['Close'], 
+                         mode='markers', name='Sell Signal', marker=dict(color='red', symbol='triangle-down', size=10)), row=1, col=1)
 
-# Cumulative return chart
-fig.add_trace(go.Scatter(x=data.index, y=data['Strategy_Cumulative_Return'], name='Strategy Return'), row=2, col=1)
-fig.add_trace(go.Scatter(x=data.index, y=data['Buy_and_Hold_Cumulative_Return'], name='Buy and Hold Return'), row=2, col=1)
+# Cumulative returns subplot
+fig.add_trace(go.Scatter(x=data.index, y=data['Cum_Strategy'], name="Strategy Returns"), row=2, col=1)
+fig.add_trace(go.Scatter(x=data.index, y=data['Cum_Benchmark'], name="Buy & Hold Returns"), row=2, col=1)
 
-# Indicator chart
-if indicator == 'MACD':
-    fig.add_trace(go.Scatter(x=data.index, y=data['MACD'], name='MACD'), row=3, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=data['Signal'], name='Signal'), row=3, col=1)
-    fig.add_bar(x=data.index, y=data['MACD_Hist'], name='MACD Histogram', row=3, col=1)
-elif indicator == 'RSI':
-    fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], name='RSI'), row=3, col=1)
+# Indicator subplot
+if indicator == "MACD":
+    fig.add_trace(go.Scatter(x=data.index, y=data['MACD'], name="MACD"), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Signal'], name="Signal"), row=3, col=1)
+elif indicator == "RSI":
+    fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], name="RSI"), row=3, col=1)
     fig.add_hline(y=overbought, line_dash="dash", line_color="red", row=3, col=1)
     fig.add_hline(y=oversold, line_dash="dash", line_color="green", row=3, col=1)
-elif indicator == 'ATR':
-    fig.add_trace(go.Scatter(x=data.index, y=data['ATR'], name='ATR'), row=3, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=data['Upper_Band'], name='Upper Band', line=dict(dash='dash')), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=data['Lower_Band'], name='Lower Band', line=dict(dash='dash')), row=1, col=1)
+elif indicator == "ATR":
+    fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name="Close"), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Upper'], name="Upper Band"), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['Lower'], name="Lower Band"), row=3, col=1)
 
-fig.update_layout(height=800, title_text=f"{ticker} Backtest Results")
-st.plotly_chart(fig, use_container_width=True)
+fig.update_layout(height=900, width=800, title_text=f"{ticker} Trading Strategy Backtest")
+st.plotly_chart(fig)
 
-# Display trade details
-st.subheader('Trade Details')
+# Calculate trade details
+trades = data[data['Position'] != data['Position'].shift(1)].copy()
+trades['Trade'] = trades['Position'].diff()
+trades = trades[trades['Trade'] != 0]
+trades['Holding Period'] = trades.index.to_series().diff().dt.days
+trades['Profit/Loss'] = trades['Close'] * trades['Trade'] * -1
 trades['Cumulative P/L'] = trades['Profit/Loss'].cumsum()
-st.dataframe(trades)
 
-# Display overall performance
+# Display trade details table
+st.subheader("Trade Details")
+st.dataframe(trades[['Close', 'Trade', 'Holding Period', 'Profit/Loss', 'Cumulative P/L']])
+
+# Display performance metrics
+total_trades = len(trades)
+profitable_trades = (trades['Profit/Loss'] > 0).sum()
+win_rate = profitable_trades / total_trades if total_trades > 0 else 0
+average_profit = trades['Profit/Loss'].mean()
 total_return = trades['Profit/Loss'].sum()
-num_trades = len(trades)
-win_rate = (trades['Profit/Loss'] > 0).mean()
+buy_hold_return = data['Close'].iloc[-1] / data['Close'].iloc[0] - 1
 
-st.subheader('Overall Performance')
+st.subheader("Performance Metrics")
 col1, col2, col3 = st.columns(3)
-col1.metric('Total Return', f'{total_return:.2%}')
-col2.metric('Number of Trades', num_trades)
-col3.metric('Win Rate', f'{win_rate:.2%}')
+col1.metric("Total Trades", total_trades)
+col2.metric("Win Rate", f"{win_rate:.2%}")
+col3.metric("Average Profit/Loss", f"${average_profit:.2f}")
+
+col4, col5, col6 = st.columns(3)
+col4.metric("Total Return", f"${total_return:.2f}")
+col5.metric("Strategy Return", f"{(data['Cum_Strategy'].iloc[-1] - 1):.2%}")
+col6.metric("Buy & Hold Return", f"{buy_hold_return:.2%}")
