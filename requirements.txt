@@ -13,3 +13,5 @@ ta
 pandas-ta
 setuptools
 beautifulsoup4
+selenium 
+webdriver_manager 
