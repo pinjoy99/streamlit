@@ -12,3 +12,4 @@ seaborn
 ta
 pandas-ta
 setuptools
+beautifulsoup4
