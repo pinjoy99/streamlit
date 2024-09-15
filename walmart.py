@@ -1,31 +1,50 @@
 import streamlit as st
-import requests
-from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
+import time
 import json
+import requests
 
-def search_walmart(keyword):
-    url = f"https://www.walmart.com/search?q={keyword}&sort=best_seller"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.content, 'html.parser')
+def setup_driver():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
     
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    return driver
+
+def search_walmart(keyword, driver):
+    url = f"https://www.walmart.com/search?q={keyword}&sort=best_seller"
+    driver.get(url)
+    
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-item-id]"))
+    )
+    
+    items = driver.find_elements(By.CSS_SELECTOR, "div[data-item-id]")
     results = []
-    items = soup.find_all('div', {'data-item-id': True})
     
     for item in items[:5]:  # Limit to first 5 results for demonstration
-        item_id = item.get('data-item-id')
-        title = item.find('span', class_='w_DJ')
-        price = item.find('div', class_='b black f5 mr1 mr2-xl lh-copy f4-l')
-        
-        if title and price:
+        try:
+            item_id = item.get_attribute("data-item-id")
+            title = item.find_element(By.CSS_SELECTOR, 'span[data-automation-id="product-title"]').text
+            price = item.find_element(By.CSS_SELECTOR, 'div[data-automation-id="product-price"]').text
+            
             results.append({
-                'Item': title.text.strip(),
-                'Online Price': price.text.strip(),
+                'Item': title.strip(),
+                'Online Price': price.strip(),
                 'Item ID': item_id
             })
+        except:
+            continue
     
     return results
 
@@ -49,7 +68,10 @@ keyword = st.sidebar.text_input("Enter keyword for bestsellers:")
 
 if keyword:
     st.write(f"Searching for '{keyword}' bestsellers...")
-    results = search_walmart(keyword)
+    
+    driver = setup_driver()
+    results = search_walmart(keyword, driver)
+    driver.quit()
     
     if results:
         for item in results:
@@ -63,4 +85,3 @@ if keyword:
         st.write("No results found. Try a different keyword.")
 else:
     st.write("Enter a keyword in the sidebar to search for bestsellers.")
-    
