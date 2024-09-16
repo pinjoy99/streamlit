@@ -15,8 +15,8 @@ def search_walmart(keyword):
     items = soup.find_all('div', {'data-item-id': True})
     
     for item in items[:5]:  # Limit to first 5 results for demonstration
-        title = item.find('span', class_='w_DJ')
-        price = item.find('div', class_='b black f5 mr1 mr2-xl lh-copy f4-l')
+        title = item.find('span', class_='w_V_DM')
+        price = item.find('div', class_='mr1 mr2-xl b black green lh-solid f5 f4-l')
         
         if title and price:
             results.append({
