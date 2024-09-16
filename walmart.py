@@ -16,7 +16,7 @@ def search_walmart(keyword):
     
     for item in items[:5]:  # Limit to first 5 results for demonstration
         title = item.find('span', class_='w_V_DM')
-        price = item.find('div', class_='mr1 mr2-xl b black green lh-solid f5 f4-l')
+        price = item.find('div', class_='mr1 mr2-xl b')
         
         if title and price:
             results.append({
