@@ -2,6 +2,7 @@ numpy
 pandas
 matplotlib
 yfinance
+pandas-datareader
 streamlit
 plotly
 polygon-api-client
