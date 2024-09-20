@@ -3,43 +3,45 @@ import pandas_datareader.data as web
 from datetime import datetime
 import os
 
-# Set API keys in environment variables or directly in the code (not recommended for production)
-os.environ['TIINGO_API_KEY'] = 'your_tiingo_api_key'
-os.environ['IEX_API_KEY'] = 'your_iex_api_key'
-os.environ['ALPHAVANTAGE_API_KEY'] = 'your_alpha_vantage_api_key'
-os.environ['ENIGMA_API_KEY'] = 'your_enigma_api_key'
+# Set API keys as environment variables or use directly in the code
+os.environ['TIINGO_API_KEY'] = 'YOUR_TIINGO_API_KEY'
+os.environ['ALPHAVANTAGE_API_KEY'] = 'YOUR_ALPHAVANTAGE_API_KEY'
+os.environ['IEX_API_KEY'] = 'YOUR_IEX_API_KEY'
 
-# Define start and end dates for data retrieval
+# Define date range for data retrieval
 start = datetime(2020, 1, 1)
-end = datetime(2020, 12, 31)
+end = datetime(2021, 1, 1)
 
-# Streamlit app title
-st.title("Pandas DataReader Examples")
+# Define a function to fetch data from different sources
+def fetch_data():
+    data_sources = {
+        "Tiingo": lambda: web.get_data_tiingo('GOOG', start=start, end=end, api_key=os.getenv('TIINGO_API_KEY')),
+        "IEX": lambda: web.DataReader('AAPL', 'iex', start=start, end=end),
+        "Alpha Vantage": lambda: web.DataReader('AAPL', 'av-daily', start=start, end=end, api_key=os.getenv('ALPHAVANTAGE_API_KEY')),
+        "FRED": lambda: web.DataReader('GDP', 'fred', start=start, end=end),
+        "World Bank": lambda: web.wb.download(indicator='NY.GDP.PCAP.KD', country=['US'], start=2019, end=2020),
+        "OECD": lambda: web.DataReader('TUD', 'oecd'),
+        "Eurostat": lambda: web.DataReader('tran_sf_railac', 'eurostat'),
+        "Stooq": lambda: web.DataReader('^DJI', 'stooq'),
+        "Yahoo Finance": lambda: web.DataReader('GE', 'yahoo', start=start, end=end)
+    }
 
-# Function to display data from different sources
-def display_data(source, symbol):
-    try:
-        df = web.DataReader(symbol, source, start, end)
-        st.write(f"Data from {source} for {symbol}:")
-        st.dataframe(df.head())
-    except Exception as e:
-        st.write(f"Failed to retrieve data from {source} for {symbol}: {e}")
+    data_frames = {}
+    for source_name, fetch_func in data_sources.items():
+        try:
+            df = fetch_func()
+            data_frames[source_name] = df.head()
+        except Exception as e:
+            st.error(f"Failed to fetch data from {source_name}: {e}")
+    
+    return data_frames
 
-# Display examples for each data source
-display_data('tiingo', 'GOOG')
-display_data('iex', 'AAPL')
-display_data('av-daily', 'MSFT')
-display_data('econdb', 'ticker=RGDPUS')
-display_data('quandl', 'WIKI/AAPL')
-display_data('fred', 'GDP')
-display_data('famafrench', '5_Industry_Portfolios')
-display_data('wb', ['NY.GDP.PCAP.KD'])
-display_data('oecd', 'TUD')
-display_data('eurostat', 'tran_sf_railac')
-display_data('tsp', None)  # No symbol needed for TSP
-display_data('nasdaq-trader', None)  # No symbol needed for Nasdaq Trader
-display_data('stooq', '^DJI')
-display_data('moex', ['USD000UTSTOM'])
-display_data('yahoo', 'GE')
+# Streamlit app layout
+st.title("Pandas Datareader Example App")
+st.write("This app demonstrates fetching example datasets using pandas-datareader from various sources.")
 
-# Note: For some sources like Enigma and Nasdaq Trader, additional setup or different methods might be needed.
+data_frames = fetch_data()
+
+for source_name, df in data_frames.items():
+    st.subheader(f"Data from {source_name}")
+    st.write(df)
