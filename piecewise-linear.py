@@ -20,8 +20,8 @@ selected_symbol = st.sidebar.selectbox("Select a Stock/ETF", symbols)
 period = st.sidebar.number_input("Select period (days)", min_value=1, value=7)
 
 # Download data
-#data = yf.download(selected_symbol, period=f'{period}d')
-data = yf.download(selected_symbol, period='1mo')
+data = yf.download(selected_symbol, period=f'{period}d')
+#data = yf.download(selected_symbol, period='1mo')
 
 st.title(f"{selected_symbol} Price Analysis")
 
