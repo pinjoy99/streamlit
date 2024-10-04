@@ -2,7 +2,7 @@ numpy
 scipy 
 pandas
 matplotlib
-yfinance
+yfinance == 0.2.31
 pandas-datareader
 streamlit
 plotly
