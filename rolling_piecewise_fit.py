@@ -21,7 +21,7 @@ st.title("SPX Piecewise Linear Regression Analysis")
 
 # Sidebar for user input
 window_size = st.sidebar.number_input("Rolling Window Size (days)", min_value=5, max_value=21, value=9)
-num_segments = st.sidebar.number_input("Number of Segments", min_value=2, max_value=10, value=3)
+num_segments = st.sidebar.number_input("Number of Segments", min_value=2, max_value=3, value=2)
 
 # Fetch SPX data
 spx_data = yf.download("^GSPC", start="2023-01-01", end="2023-02-01")
