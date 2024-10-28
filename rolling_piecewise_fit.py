@@ -2,85 +2,78 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from piecewise_regression import Fit
-from scipy.stats import norm
+import pwlf
+import plotly.graph_objects as go
+import plotly.figure_factory as ff
 
-# Function to fetch SPX data
-def get_spx_data():
-    spx = yf.Ticker("^GSPC")
-    data = spx.history(start="2023-01-01", end="2023-02-01")
-    return data['Close']
+# Function to perform piecewise linear regression
+def perform_pwlf(x, y, num_segments):
+    model = pwlf.PiecewiseLinFit(x, y)
+    model.fit(num_segments)
+    return model.fit_breaks, model.slopes
 
-# Function to perform piecewise regression on a window
-def piecewise_regression(x, y, n_breakpoints=2):
-    try:
-        model = Fit(x, y, n_breakpoints=n_breakpoints)
-        results = model.get_results()
-        breakpoints = results['estimates']['breakpoints']
-        slopes = results['estimates']['slopes']
-        return breakpoints, slopes
-    except:
-        return [], []
-
-# Function to analyze rolling windows
-def analyze_rolling_windows(data, window_size, n_breakpoints):
-    all_slope_changes = []
-    breakpoints_with_significant_changes = []
-
-    for i in range(len(data) - window_size + 1):
-        window = data.iloc[i:i+window_size]
-        x = np.arange(len(window))
-        y = window.values
-        
-        breakpoints, slopes = piecewise_regression(x, y, n_breakpoints)
-        
-        if len(slopes) > 1:
-            slope_changes = np.diff(slopes)
-            all_slope_changes.extend(slope_changes)
-            
-            for j, change in enumerate(slope_changes):
-                if abs(change) > np.std(all_slope_changes):
-                    breakpoints_with_significant_changes.append(window.index[int(breakpoints[j])])
-
-    return all_slope_changes, breakpoints_with_significant_changes
+# Function to calculate slope changes
+def calculate_slope_changes(slopes):
+    return np.diff(slopes)
 
 # Streamlit app
-st.title("S&P 500 Piecewise Regression Analysis")
+st.title("SPX Piecewise Linear Regression Analysis")
 
-# Sidebar
-window_size = st.sidebar.number_input("Rolling Window Size", min_value=5, max_value=21, value=11)
-n_breakpoints = st.sidebar.number_input("Number of Breakpoints", min_value=1, max_value=5, value=2)
+# Sidebar for user input
+window_size = st.sidebar.number_input("Rolling Window Size (days)", min_value=5, max_value=21, value=9)
+num_segments = st.sidebar.number_input("Number of Segments", min_value=2, max_value=10, value=3)
 
-# Fetch data
-spx_data = get_spx_data()
+# Fetch SPX data
+spx_data = yf.download("^GSPC", start="2023-01-01", end="2023-12-31")
+spx_data.reset_index(inplace=True)
 
-# Analyze rolling windows
-slope_changes, significant_breakpoints = analyze_rolling_windows(spx_data, window_size, n_breakpoints)
+# Prepare data for analysis
+x = (spx_data['Date'] - spx_data['Date'].min()).dt.days.values
+y = spx_data['Close'].values
 
-# Plot SPX time series with breakpoints
-fig, ax = plt.subplots(figsize=(12, 6))
-ax.plot(spx_data.index, spx_data.values)
-ax.set_title("S&P 500 (2023) with Significant Breakpoints")
-ax.set_xlabel("Date")
-ax.set_ylabel("Price")
+# Perform rolling window analysis
+results = []
+all_breakpoints = []
+all_slope_changes = []
 
-for bp in significant_breakpoints:
-    ax.axvline(bp, color='r', linestyle='--', alpha=0.5)
+for i in range(len(spx_data) - window_size + 1):
+    window_x = x[i:i+window_size]
+    window_y = y[i:i+window_size]
+    
+    breaks, slopes = perform_pwlf(window_x, window_y, num_segments)
+    slope_changes = calculate_slope_changes(slopes)
+    
+    results.append({
+        'Window Start': spx_data['Date'].iloc[i],
+        'Window End': spx_data['Date'].iloc[i+window_size-1],
+        'Breakpoints': breaks[1:-1],
+        'Slopes': slopes
+    })
+    
+    all_breakpoints.extend(breaks[1:-1])
+    all_slope_changes.extend(slope_changes)
 
-st.pyplot(fig)
+# Create summary table
+summary_df = pd.DataFrame(results)
+st.subheader("Summary Table")
+st.dataframe(summary_df)
 
-# Histogram of slope changes
-fig, ax = plt.subplots(figsize=(10, 5))
-ax.hist(slope_changes, bins=30, edgecolor='black')
-ax.set_title("Histogram of Slope Changes")
-ax.set_xlabel("Slope Change")
-ax.set_ylabel("Frequency")
-st.pyplot(fig)
+# Create histogram of slope changes
+st.subheader("Histogram of Slope Changes")
+fig = ff.create_distplot([all_slope_changes], ['Slope Changes'], bin_size=0.01)
+st.plotly_chart(fig)
 
-# Summary statistics
-st.subheader("Summary Statistics")
-st.write(f"Total number of windows analyzed: {len(spx_data) - window_size + 1}")
-st.write(f"Number of significant breakpoints detected: {len(significant_breakpoints)}")
-st.write(f"Mean slope change: {np.mean(slope_changes):.4f}")
-st.write(f"Standard deviation of slope changes: {np.std(slope_changes):.4f}")
+# Plot SPX time-series with breakpoints
+st.subheader("SPX Time-series with Breakpoints")
+fig = go.Figure()
+
+fig.add_trace(go.Scatter(x=spx_data['Date'], y=spx_data['Close'], mode='lines', name='SPX'))
+
+for bp in all_breakpoints:
+    bp_date = spx_data['Date'].min() + pd.Timedelta(days=int(bp))
+    fig.add_vline(x=bp_date, line_dash="dash", line_color="red", opacity=0.3)
+
+fig.update_layout(xaxis_title="Date", yaxis_title="SPX Close Price")
+st.plotly_chart(fig)
+
+st.write("Note: Red dashed lines represent breakpoints from all rolling windows.")
