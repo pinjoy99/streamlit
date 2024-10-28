@@ -24,7 +24,7 @@ window_size = st.sidebar.number_input("Rolling Window Size (days)", min_value=5,
 num_segments = st.sidebar.number_input("Number of Segments", min_value=2, max_value=10, value=3)
 
 # Fetch SPX data
-spx_data = yf.download("^GSPC", start="2023-01-01", end="2023-12-31")
+spx_data = yf.download("^GSPC", start="2023-01-01", end="2023-02-01")
 spx_data.reset_index(inplace=True)
 
 # Prepare data for analysis
