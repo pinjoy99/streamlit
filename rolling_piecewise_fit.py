@@ -9,7 +9,7 @@ from scipy.stats import norm
 # Function to fetch SPX data
 def get_spx_data():
     spx = yf.Ticker("^GSPC")
-    data = spx.history(start="2023-01-01", end="2023-12-31")
+    data = spx.history(start="2023-01-01", end="2023-02-01")
     return data['Close']
 
 # Function to perform piecewise regression on a window
