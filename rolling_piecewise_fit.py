@@ -49,7 +49,7 @@ def analyze_rolling_windows(data, window_size, n_breakpoints):
 st.title("S&P 500 Piecewise Regression Analysis")
 
 # Sidebar
-window_size = st.sidebar.number_input("Rolling Window Size", min_value=30, max_value=252, value=60)
+window_size = st.sidebar.number_input("Rolling Window Size", min_value=5, max_value=21, value=11)
 n_breakpoints = st.sidebar.number_input("Number of Breakpoints", min_value=1, max_value=5, value=2)
 
 # Fetch data
