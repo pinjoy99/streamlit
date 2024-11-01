@@ -18,7 +18,7 @@ st.title("Stock Trading Strategy Backtester")
 # Sidebar inputs
 st.sidebar.header("Settings")
 ticker = st.sidebar.selectbox("Select a stock", top_30)
-years = st.sidebar.number_input("Number of years of historical data", min_value=1, max_value=10, value=4)
+years = st.sidebar.number_input("Number of years of historical data", min_value=1, max_value=10, value=1)
 end_date = pd.Timestamp.now()
 start_date = end_date - pd.DateOffset(years=years)
 
