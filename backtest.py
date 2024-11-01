@@ -21,6 +21,8 @@ ticker = st.sidebar.selectbox("Select a stock", top_30)
 years = st.sidebar.number_input("Number of years of historical data", min_value=1, max_value=10, value=1)
 end_date = pd.Timestamp.now()
 start_date = end_date - pd.DateOffset(years=years)
+date_range = st.sidebar.date_input('Select date range', [start_date, end_date])
+
 
 indicator = st.sidebar.selectbox("Select an indicator", ["MACD", "RSI", "ATR", "SMA Crossover"])
 
@@ -36,8 +38,8 @@ elif indicator == "ATR":
     atr_period = st.sidebar.slider("ATR period", 5, 30, 14)
     atr_multiplier = st.sidebar.slider("ATR multiplier", 1.0, 5.0, 2.0, 0.1)
 elif indicator == "SMA Crossover":
-    short_window = st.sidebar.slider("Short SMA window", 5, 50, 10)
-    long_window = st.sidebar.slider("Long SMA window", 20, 100, 30)
+    short_window = st.sidebar.slider("Short SMA window", 1, 50, 10)
+    long_window = st.sidebar.slider("Long SMA window", 10, 100, 30)
 
 # Download data
 @st.cache_data
