@@ -43,7 +43,7 @@ elif indicator == "SMA Crossover":
 
 # Download data
 @st.cache_data
-def download_data(ticker, start_date, end_date):
+def download_data(ticker, date_range[0], date_range[1]):
     data = yf.download(ticker, start=start_date, end=end_date)
     return data
 
