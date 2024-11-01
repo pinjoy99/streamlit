@@ -29,8 +29,8 @@ indicators = ['SMA Crossover', 'MACD', 'RSI', 'ATR']
 # Sidebar
 st.sidebar.title('Stock Analysis App')
 ticker = st.sidebar.selectbox('Select a stock', tickers)
-end_date = datetime.now()
-start_date = end_date - timedelta(days=4*365)
+#end_date = datetime.now()
+#start_date = end_date - timedelta(days=4*365)
 date_range = st.sidebar.date_input('Select date range', [start_date, end_date])
 indicator = st.sidebar.selectbox('Select an indicator', indicators)
 
