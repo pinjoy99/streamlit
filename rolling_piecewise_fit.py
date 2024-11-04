@@ -70,7 +70,7 @@ fig = go.Figure()
 fig.add_trace(go.Scatter(x=spx_data['Date'], y=spx_data['Close'], mode='lines', name='SPX'))
 
 for bp in all_breakpoints:
-    bp_date = spx_data['Date'].min() + pd.Timedelta(days=int(bp))
+    bp_date = spx_data['Date'].min() + pd.Timedelta(days=round(bp))
     fig.add_vline(x=bp_date, line_dash="dash", line_color="red", opacity=0.3)
 
 fig.update_layout(xaxis_title="Date", yaxis_title="SPX Close Price")
