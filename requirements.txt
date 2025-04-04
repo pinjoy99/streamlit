@@ -1,22 +1,7 @@
-
-numpy
-scipy 
-pandas
-matplotlib
-yfinance == 0.2.31
-pandas-datareader
 streamlit
+pandas
 plotly
-polygon-api-client
-requests
-altair
-mpld3
-seaborn
-ta
-pandas-ta
-setuptools
-beautifulsoup4
-selenium 
-webdriver_manager 
-pwlf
-piecewise_regression 
+numpy
+alpaca-trade-api
+# Optional, but good for local testing consistency if .env is used
+python-dotenv
